@@ -1,0 +1,158 @@
+patches-own [
+  chemical                 ; Variable que representa la concentración química en el parche.
+  food                     ; Variable que indica si hay comida en el parche.
+  nest?                    ; Variable booleana que indica si el parche es un nido.
+  nest-scent               ; Variable que almacena el olor a nido en el parche.
+  food-source-number       ; Variable que identifica el número de fuente de alimento en el parche.
+]
+
+to setup
+  clear-all                                          ; Borra todos los elementos en el entorno.
+  set-default-shape turtles "bug"                   ; Establece la forma predeterminada de las tortugas como "bug".
+  let upper-nest-patches patches with [distancexy max-pxcor max-pycor < 5]  ; Lista de parches cercanos al nido superior.
+  let lower-nest-patches patches with [distancexy min-pxcor min-pycor < 5]  ; Lista de parches cercanos al nido inferior.
+  let upper-nest-turtles ceiling (population / 2)   ; Número de tortugas para el nido superior.
+  let lower-nest-turtles floor (population / 2)     ; Número de tortugas para el nido inferior.
+  create-turtles upper-nest-turtles [               ; Crea las tortugas para el nido superior.
+    set size 2                                      ; Establece el tamaño de la tortuga.
+    set color red                                   ; Establece el color de la tortuga.
+    move-to one-of upper-nest-patches               ; Mueve la tortuga a un parche cercano al nido superior.
+  ]
+  create-turtles lower-nest-turtles [               ; Crea las tortugas para el nido inferior.
+    set size 2                                      ; Establece el tamaño de la tortuga.
+    set color blue                                  ; Establece el color de la tortuga.
+    move-to one-of lower-nest-patches               ; Mueve la tortuga a un parche cercano al nido inferior.
+  ]
+  setup-patches                                      ; Llama al procedimiento para configurar los parches.
+  reset-ticks                                        ; Reinicia el contador de ticks de la simulación.
+end
+
+to setup-patches
+  ask patches [                                      ; Para cada parche en el mundo:
+    setup-nest                                       ; Configura el nido en el parche.
+    setup-food                                       ; Configura la comida en el parche.
+    recolor-patch                                    ; Cambia el color del parche según su estado.
+  ]
+end
+
+to setup-nest
+  set nest? (distancexy max-pxcor max-pycor) < 5 or (distancexy min-pxcor min-pycor) < 5  ; Comprueba si el parche está cerca de algún nido.
+  let distances-to-nests (list (distancexy max-pxcor max-pycor) (distancexy min-pxcor min-pycor))  ; Lista de distancias a los nidos.
+  set nest-scent 200 - min distances-to-nests       ; Establece el olor a nido en el parche.
+end
+
+to setup-food
+  if (distancexy 13 13) < 5 [ set food-source-number 1 ]          ; Asigna un número de fuente de alimento si el parche está cerca de una ubicación específica.
+  if (distancexy -13 -13) < 5 [ set food-source-number 2 ]
+  if (distancexy -13 13) < 5 [ set food-source-number 3 ]
+  if (distancexy 13 -13) < 5 [ set food-source-number 4 ]
+  if (distancexy 20 0) < 5 [ set food-source-number 5 ]
+  if (distancexy -20 0) < 5 [ set food-source-number 6 ]
+  if food-source-number > 0 [ set food one-of [1 2] ]            ; Asigna comida al parche si tiene una fuente de alimento.
+end
+
+to recolor-patch
+  ifelse nest?                                                    ; Si el parche es un nido:
+  [ if any? patches with [distancexy max-pxcor max-pycor < 5]     ;   Si hay parches cercanos al nido superior:
+    [ set pcolor violet ]                                         ;     Cambia el color del parche a violeta.
+    if any? patches with [distancexy min-pxcor min-pycor < 5]     ;   Si hay parches cercanos al nido inferior:
+    [ set pcolor pink ]                                           ;     Cambia el color del parche a rosa.
+  ]
+  [ ifelse food > 0                                               ; Si hay comida en el parche:
+    [ if food-source-number = 1 [ set pcolor cyan ]               ;   Cambia el color del parche según el número de fuente de alimento.
+      if food-source-number = 2 [ set pcolor sky ]
+      if food-source-number = 3 [ set pcolor blue ]
+      if food-source-number = 4 [ set pcolor magenta ]
+      if food-source-number = 5 [ set pcolor yellow ]
+      if food-source-number = 6 [ set pcolor red ]
+    ]
+    [ set pcolor scale-color green chemical 0.1 5 ]               ; Si no hay comida, cambia el color del parche según la concentración química.
+  ]
+end
+
+to go
+  ask turtles [
+    ifelse color = red                                             ; Si el color de la tortuga es rojo (nido superior):
+    [ look-for-food ]                                               ;   La tortuga busca comida.
+    [ search-for-food-and-return ]                                 ;   La tortuga busca comida y luego regresa al nido.
+    wiggle                                                         ; Realiza movimientos aleatorios.
+    fd 1                                                           ; Avanza una unidad.
+  ]
+  diffuse chemical (diffusion-rate / 100)                         ; Difunde la concentración química en el mundo.
+  ask patches [
+    set chemical chemical * (100 - evaporation-rate) / 100          ; Actualiza la concentración química en cada parche.
+    recolor-patch                                                  ; Recolora los parches según su estado.
+  ]
+  tick                                                             ; Incrementa el contador de ticks de la simulación.
+end
+to search-for-food-and-return
+  if food > 0 [                                                  ; Si hay comida en el parche:
+    set color yellow                                             ;   Cambia el color de la tortuga a amarillo.
+    set food food - 1                                            ;   Disminuye la cantidad de comida en el parche.
+  ]
+  ifelse color = yellow [                                        ; Si el color de la tortuga es amarillo:
+    return-to-nest                                               ;   La tortuga regresa al nido.
+  ] [
+    if (chemical >= 0.05) and (chemical < 2) [                  ; Si la concentración química en el parche es mayor o igual a 0.05 y menor que 2:
+      uphill-chemical                                            ;   La tortuga sube la pendiente del olor químico.
+    ]
+  ]
+end
+
+to return-to-nest
+  ifelse nest? [                                                  ; Si este parche es un nido:
+    set color red                                                 ;   Cambia el color de la tortuga a rojo.
+    set food food + 1                                             ;   Aumenta la cantidad de comida en el parche.
+  ] [
+    set chemical chemical + 60                                    ; Si no es un nido, aumenta la concentración química en el parche en 60 unidades.
+    uphill-nest-scent                                             ; La tortuga sube la pendiente del olor a nido.
+  ]
+end
+
+to look-for-food
+  if food > 0 [                                                    ; Si hay comida en el parche:
+    set color orange                                               ;   Cambia el color de la tortuga a naranja.
+    set food food - 1                                              ;   Disminuye la cantidad de comida en el parche.
+    rt 180                                                          ;   Gira 180 grados.
+    stop                                                            ;   Detiene la ejecución del procedimiento.
+  ]
+  if (chemical >= 0.05) and (chemical < 2) [                       ; Si la concentración química en el parche es mayor o igual a 0.05 y menor que 2:
+    uphill-chemical                                                ;   La tortuga sube la pendiente del olor químico.
+  ]
+end
+
+to uphill-chemical
+  let scent-ahead chemical-scent-at-angle 0                         ; Calcula el olor químico frente a la tortuga.
+  let scent-right chemical-scent-at-angle 45                        ; Calcula el olor químico a la derecha de la tortuga.
+  let scent-left chemical-scent-at-angle -45                        ; Calcula el olor químico a la izquierda de la tortuga.
+  if (scent-right > scent-ahead) or (scent-left > scent-ahead) [    ; Si el olor a la derecha o a la izquierda es mayor que el olor frente a la tortuga:
+    ifelse scent-right > scent-left [ rt 45 ] [ lt 45 ]            ;   Gira a la derecha o a la izquierda según sea el caso.
+  ]
+end
+
+to uphill-nest-scent
+  let scent-ahead nest-scent-at-angle 0                             ; Calcula el olor a nido frente a la tortuga.
+  let scent-right nest-scent-at-angle 45                            ; Calcula el olor a nido a la derecha de la tortuga.
+  let scent-left nest-scent-at-angle -45                            ; Calcula el olor a nido a la izquierda de la tortuga.
+  if (scent-right > scent-ahead) or (scent-left > scent-ahead) [    ; Si el olor a la derecha o a la izquierda es mayor que el olor frente a la tortuga:
+    ifelse scent-right > scent-left [ rt 45 ] [ lt 45 ]            ;   Gira a la derecha o a la izquierda según sea el caso.
+  ]
+end
+
+to wiggle
+  rt random 40                                                     ; Gira aleatoriamente a la derecha un ángulo entre 0 y 40 grados.
+  lt random 40                                                     ; Gira aleatoriamente a la izquierda un ángulo entre 0 y 40 grados.
+  if not can-move? 1 [ rt 180 ]                                    ; Si no puede avanzar una unidad, gira 180 grados.
+end
+
+to-report nest-scent-at-angle [angle]
+  let p patch-right-and-ahead angle 1                              ; Obtiene el parche que se encuentra a cierto ángulo frente a la tortuga.
+  if p = nobody [ report 0 ]                                       ; Si no hay parche, reporta 0.
+  report [nest-scent] of p                                         ; Reporta el olor a nido en ese parche.
+end
+
+to-report chemical-scent-at-angle [angle]
+  let p patch-right-and-ahead angle 1                              ; Obtiene el parche que se encuentra a cierto ángulo frente a la tortuga.
+  if p = nobody [ report 0 ]                                       ; Si no hay parche, reporta 0.
+  report [chemical] of p                                           ; Reporta la concentración química en ese parche.
+end
