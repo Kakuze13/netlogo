@@ -1,0 +1,156 @@
+patches-own [
+  chemical
+  food
+  nest?
+  nest-scent
+  food-source-number
+]
+
+to setup
+  clear-all
+  set-default-shape turtles "bug"
+  let upper-nest-patches patches with [distancexy max-pxcor max-pycor < 5]
+  let lower-nest-patches patches with [distancexy min-pxcor min-pycor < 5]
+  let upper-nest-turtles ceiling (population / 2)
+  let lower-nest-turtles floor (population / 2)
+  create-turtles upper-nest-turtles [
+    set size 2
+    set color red
+    move-to one-of upper-nest-patches
+  ]
+  create-turtles lower-nest-turtles [
+    set size 2
+    set color blue
+    move-to one-of lower-nest-patches
+  ]
+  setup-patches
+  reset-ticks
+end
+
+to setup-patches
+  ask patches [
+    setup-nest
+    setup-food
+    recolor-patch
+  ]
+end
+
+to setup-nest
+  set nest? (distancexy max-pxcor max-pycor) < 5 or (distancexy min-pxcor min-pycor) < 5
+  let distances-to-nests (list (distancexy max-pxcor max-pycor) (distancexy min-pxcor min-pycor))
+  set nest-scent 200 - min distances-to-nests
+end
+
+to setup-food
+  if (distancexy 13 13) < 5 [ set food-source-number 1 ]
+  if (distancexy -13 -13) < 5 [ set food-source-number 2 ]
+  if (distancexy -13 13) < 5 [ set food-source-number 3 ]
+  if (distancexy 13 -13) < 5 [ set food-source-number 4 ]
+  if (distancexy 20 0) < 5 [ set food-source-number 5 ]
+  if (distancexy -20 0) < 5 [ set food-source-number 6 ]
+  if food-source-number > 0 [ set food one-of [1 2] ]
+end
+
+to recolor-patch
+  ifelse nest?
+  [ if any? patches with [distancexy max-pxcor max-pycor < 5]
+    [ set pcolor violet ]
+    if any? patches with [distancexy min-pxcor min-pycor < 5]
+    [ set pcolor pink ] ]
+  [ ifelse food > 0
+    [ if food-source-number = 1 [ set pcolor cyan ]
+      if food-source-number = 2 [ set pcolor sky ]
+      if food-source-number = 3 [ set pcolor blue ]
+      if food-source-number = 4 [ set pcolor magenta ]
+      if food-source-number = 5 [ set pcolor yellow ]
+      if food-source-number = 6 [ set pcolor red ] ]
+    [ set pcolor scale-color green chemical 0.1 5 ] ]
+end
+
+to go
+  ask turtles [
+    ifelse color = red
+    [ look-for-food ]
+    [ search-for-food-and-return ]
+    wiggle
+    fd 1
+  ]
+  diffuse chemical (diffusion-rate / 100)
+  ask patches [
+    set chemical chemical * (100 - evaporation-rate) / 100
+    recolor-patch
+  ]
+  tick
+end
+
+to search-for-food-and-return
+  if food > 0 [
+    set color yellow
+    set food food - 1
+  ]
+  ifelse color = yellow [
+    return-to-nest
+  ] [
+    if (chemical >= 0.05) and (chemical < 2) [
+      uphill-chemical
+    ]
+  ]
+end
+
+to return-to-nest
+  ifelse nest? [
+    set color red
+    set food food + 1
+  ] [
+    set chemical chemical + 60
+    uphill-nest-scent
+  ]
+end
+
+to look-for-food
+  if food > 0 [
+    set color orange
+    set food food - 1
+    rt 180
+    stop
+  ]
+  if (chemical >= 0.05) and (chemical < 2) [
+    uphill-chemical
+  ]
+end
+
+to uphill-chemical
+  let scent-ahead chemical-scent-at-angle 0
+  let scent-right chemical-scent-at-angle 45
+  let scent-left chemical-scent-at-angle -45
+  if (scent-right > scent-ahead) or (scent-left > scent-ahead) [
+    ifelse scent-right > scent-left [ rt 45 ] [ lt 45 ]
+  ]
+end
+
+to uphill-nest-scent
+  let scent-ahead nest-scent-at-angle 0
+  let scent-right nest-scent-at-angle 45
+  let scent-left nest-scent-at-angle -45
+  if (scent-right > scent-ahead) or (scent-left > scent-ahead) [
+    ifelse scent-right > scent-left [ rt 45 ] [ lt 45 ]
+  ]
+end
+
+to wiggle
+  rt random 40
+  lt random 40
+  if not can-move? 1 [ rt 180 ]
+end
+
+to-report nest-scent-at-angle [angle]
+  let p patch-right-and-ahead angle 1
+  if p = nobody [ report 0 ]
+  report [nest-scent] of p
+end
+
+to-report chemical-scent-at-angle [angle]
+  let p patch-right-and-ahead angle 1
+  if p = nobody [ report 0 ]
+  report [chemical] of p
+end
